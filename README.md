@@ -1,9 +1,9 @@
 ## Structure du projet
 
-Place tous les fichiers de _data_ à la racine du projet
+Place the data on the project source
 
 ```plaintext
-projet-smurfs/
+LELEC2870-PROJECT/
 │
 ├── data/
 ├── Part1/
