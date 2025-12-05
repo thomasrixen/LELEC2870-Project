@@ -230,62 +230,53 @@ class MyCNN:
 
 
 def visualize_dataset_tSNE(dataset, extract_features=False, feature_extractor=None, perplexity=30, random_state=42, zoom=2.0):
-    """
-    Visualize image data in 2D via t-SNE.
-    - If extract_features=True, uses feature_extractor.extract_features(dataset.images, dataset.images_directory).
-    - Otherwise, flattens pixel values (48x48) and uses them directly.
-    Adds interactive hover to display the corresponding image.
-    """
-    # Create dataloader
+    from sklearn.manifold import TSNE
+    from torch.utils.data import DataLoader
+    import numpy as np
+    import matplotlib.pyplot as plt
+    from matplotlib.offsetbox import AnnotationBbox, OffsetImage
+    from matplotlib.colors import LinearSegmentedColormap
+
     data_loader = DataLoader(dataset, batch_size=len(dataset), shuffle=False)
     batch = next(iter(data_loader))
 
-    # Support datasets that return only images, or (images, labels)
     if isinstance(batch, (list, tuple)) and len(batch) == 2:
         images, labels = batch
         labels = labels.squeeze().numpy()
     else:
         images = batch
-        labels = np.zeros(len(images))  # fallback if no labels provided
+        labels = np.zeros(len(images))
 
-    tsne = TSNE(n_components=2, perplexity=perplexity, random_state=random_state)
-
-    # If extract feature is True, first extract features then apply t-SNE
+    # Prepare input matrix X
     if extract_features:
         assert feature_extractor is not None, "feature_extractor must be provided when extract_features=True"
         X = feature_extractor.extract_features(dataset.images, dataset.images_directory)
     else:
         X = images.squeeze().numpy().reshape(len(images), -1)
 
+    # Choose t-SNE init: use 'random' when X has <2 features to avoid PCA failure
+    tsne_init = 'pca' if X.shape[1] >= 2 else 'random'
+    tsne = TSNE(n_components=2, perplexity=perplexity, random_state=random_state, init=tsne_init)
+
     X2 = tsne.fit_transform(X)
 
-    # Define custom colormap for risk
     colors = ["green", "yellow", "orange", "red", "black"]
     nodes = [0, 0.15, 0.3, 0.5, 1]
     mycmap = LinearSegmentedColormap.from_list("mycmap", list(zip(nodes, colors)))
 
-    # Create plot
     fig, ax = plt.subplots(figsize=(7, 6))
     scatter = ax.scatter(X2[:, 0], X2[:, 1], c=labels, cmap=mycmap, vmin=0, vmax=1, s=12)
     ax.axis('off')
     cb = plt.colorbar(scatter, ax=ax, pad=0.01)
     cb.set_label("Risk", rotation=270, labelpad=10)
 
-    # Define annotation box and initialize with dummy values
     im = OffsetImage(images[0].squeeze().numpy(), cmap='gray', zoom=zoom)
-    ab = AnnotationBbox(
-        offsetbox=im,
-        xy=(0, 0),
-        xybox=(-40, 40),
-        xycoords='data',
-        boxcoords="offset points",
-        pad=0,
-        arrowprops=dict(arrowstyle="->", color="gray", lw=1.0),
-    )
+    ab = AnnotationBbox(offsetbox=im, xy=(0, 0), xybox=(-40, 40), xycoords='data',
+                        boxcoords="offset points", pad=0,
+                        arrowprops=dict(arrowstyle="->", color="gray", lw=1.0))
     ab.set_visible(False)
     ax.add_artist(ab)
 
-    # Hover callback
     imgs = images.squeeze().numpy()
     def motion_hover(event):
         ab_visible = ab.get_visible()
